@@ -1,4 +1,5 @@
 using SteamCloneApp.Models;
+using System.Text.RegularExpressions;
 
 namespace SteamCloneApp.Services
 {
@@ -8,6 +9,8 @@ namespace SteamCloneApp.Services
     public class UsuarioService
     {
         private readonly DataStore _db = DataStore.Instance;
+
+        private static readonly Regex RegexCorreo = new(@"^[^@\s]+@[^@\s]+\.[^@\s]+$");
 
         public Usuario? Login(string nombreUsuario, string password)
         {
@@ -23,11 +26,29 @@ namespace SteamCloneApp.Services
 
         public (bool exito, string mensaje) Registrar(string nombreUsuario, string correo, string password)
         {
+            nombreUsuario = nombreUsuario.Trim();
+            correo = correo.Trim();
+
             if (string.IsNullOrWhiteSpace(nombreUsuario) || string.IsNullOrWhiteSpace(correo) || string.IsNullOrWhiteSpace(password))
                 return (false, "Todos los campos son obligatorios.");
 
-            if (password.Length < 4)
-                return (false, "La contraseña debe tener al menos 4 caracteres.");
+            if (nombreUsuario.Length < 3 || nombreUsuario.Length > 20)
+                return (false, "El nombre de usuario debe tener entre 3 y 20 caracteres.");
+
+            if (!NombreUsuarioValido(nombreUsuario))
+                return (false, "El nombre de usuario solo puede contener letras, números y guion bajo (_).");
+
+            if (nombreUsuario.Equals("admin", StringComparison.OrdinalIgnoreCase))
+                return (false, "Ese nombre de usuario está reservado.");
+
+            if (correo.Length > 100 || !EsCorreoValido(correo))
+                return (false, "Ingresa un correo electrónico válido (ej. nombre@dominio.com).");
+
+            if (password.Length < 4 || password.Length > 64)
+                return (false, "La contraseña debe tener entre 4 y 64 caracteres.");
+
+            if (!ContraseniaValida(password))
+                return (false, "La contraseña debe combinar letras y números.");
 
             if (_db.Usuarios.Any(u => u.NombreUsuario.Equals(nombreUsuario, StringComparison.OrdinalIgnoreCase)))
                 return (false, "Ese nombre de usuario ya existe.");
@@ -38,8 +59,8 @@ namespace SteamCloneApp.Services
             var nuevo = new Usuario
             {
                 UsuarioId = _db.SiguienteUsuarioId(),
-                NombreUsuario = nombreUsuario.Trim(),
-                Correo = correo.Trim(),
+                NombreUsuario = nombreUsuario,
+                Correo = correo,
                 PasswordHash = password, // NOTA: en producción usar hashing (BCrypt/PBKDF2)
                 Rol = RolUsuario.Usuario,
                 Saldo = 50m, // saldo de bienvenida simulado
@@ -50,6 +71,15 @@ namespace SteamCloneApp.Services
             PersistenciaService.GuardarUsuarios(_db.Usuarios);
             return (true, "Cuenta creada exitosamente.");
         }
+
+        private static bool NombreUsuarioValido(string nombre) =>
+            nombre.All(c => char.IsLetterOrDigit(c) || c == '_');
+
+        private static bool EsCorreoValido(string correo) =>
+            RegexCorreo.IsMatch(correo);
+
+        private static bool ContraseniaValida(string password) =>
+            password.Any(char.IsLetter) && password.Any(char.IsDigit);
 
         public List<Usuario> ObtenerTodos() => _db.Usuarios.ToList();
 
@@ -158,5 +188,24 @@ namespace SteamCloneApp.Services
         /// <summary>Lista de usuarios distintos al indicado, útil para el flujo de "Reportar usuario".</summary>
         public List<Usuario> ObtenerOtrosUsuarios(int usuarioIdExcluir) =>
             _db.Usuarios.Where(u => u.UsuarioId != usuarioIdExcluir).ToList();
+
+        /// <summary>
+        /// Elimina definitivamente la cuenta de un usuario no administrador,
+        /// limpiando también su biblioteca, transacciones y carrito.
+        /// </summary>
+        public (bool exito, string mensaje) EliminarCuenta(int usuarioId)
+        {
+            var u = _db.Usuarios.FirstOrDefault(x => x.UsuarioId == usuarioId);
+            if (u == null) return (false, "Usuario no encontrado.");
+            if (u.Rol == RolUsuario.Administrador) return (false, "La cuenta de administrador no puede eliminarse.");
+
+            _db.Usuarios.Remove(u);
+            _db.Biblioteca.RemoveAll(b => b.UsuarioId == usuarioId);
+            _db.Transacciones.RemoveAll(t => t.UsuarioId == usuarioId);
+            _db.Carritos.Remove(usuarioId);
+
+            PersistenciaService.GuardarUsuarios(_db.Usuarios);
+            return (true, "Tu cuenta fue eliminada correctamente.");
+        }
     }
 }

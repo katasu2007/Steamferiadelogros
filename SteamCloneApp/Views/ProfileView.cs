@@ -92,6 +92,9 @@ namespace SteamCloneApp.Views
                 "Account Details"));
             AgregarItemMenu("Change Account", ref y, () => _mainForm.CerrarSesion());
             AgregarItemMenu("Sign Out", ref y, () => _mainForm.CerrarSesion(), UiTheme.AccentRed);
+
+            if (usuario.Rol != RolUsuario.Administrador)
+                AgregarItemMenu("Eliminar mi cuenta", ref y, () => EliminarCuenta(usuario), UiTheme.AccentRed);
         }
 
         private Panel CrearStat(string valor, string etiqueta, int x)
@@ -255,6 +258,20 @@ namespace SteamCloneApp.Views
             var (exito, mensaje) = _usuarioService.EliminarAmigo(usuario.UsuarioId, nombreAmigo);
             MessageBox.Show(mensaje, exito ? "Amigo eliminado" : "Aviso", MessageBoxButtons.OK, exito ? MessageBoxIcon.Information : MessageBoxIcon.Warning);
             if (exito) _mainForm.MostrarVista(new ProfileView(_mainForm));
+        }
+
+        private void EliminarCuenta(Usuario usuario)
+        {
+            var confirmar = MessageBox.Show(
+                $"¿Seguro que quieres eliminar tu cuenta '{usuario.NombreUsuario}'? Esta acción no se puede deshacer.",
+                "Eliminar cuenta",
+                MessageBoxButtons.YesNo,
+                MessageBoxIcon.Warning);
+            if (confirmar != DialogResult.Yes) return;
+
+            var (exito, mensaje) = _usuarioService.EliminarCuenta(usuario.UsuarioId);
+            MessageBox.Show(mensaje, exito ? "Cuenta eliminada" : "Aviso", MessageBoxButtons.OK, exito ? MessageBoxIcon.Information : MessageBoxIcon.Warning);
+            if (exito) _mainForm.CerrarSesion();
         }
 
         private void MostrarResumenPerfil(Usuario usuario)

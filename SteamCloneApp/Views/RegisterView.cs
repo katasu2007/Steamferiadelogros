@@ -1,4 +1,5 @@
 using SteamCloneApp.Services;
+using System.Text.RegularExpressions;
 
 namespace SteamCloneApp.Views
 {
@@ -11,6 +12,9 @@ namespace SteamCloneApp.Views
         private readonly TextBox _txtPassword = new();
         private readonly TextBox _txtPassword2 = new();
         private readonly Label _lblMensaje = new();
+
+        private static readonly Regex RegexCorreo = new(@"^[^@\s]+@[^@\s]+\.[^@\s]+$");
+        private static readonly Color ColorInvalid = Color.FromArgb(80, 40, 46);
 
         public RegisterView(MainForm mainForm)
         {
@@ -29,9 +33,18 @@ namespace SteamCloneApp.Views
             var lblTitulo = new Label { Text = "Crear cuenta", Font = UiTheme.FontTitle, ForeColor = UiTheme.TextPrimary, AutoSize = true, Location = new Point(30, 25) };
 
             _txtUsuario.Location = new Point(30, 90); _txtUsuario.Width = 340; EstilizarTextBox(_txtUsuario);
+            _txtUsuario.MaxLength = 20;
+            _txtUsuario.KeyPress += TxtUsuario_KeyPress;
+            _txtUsuario.TextChanged += (s, e) => SanearUsuario();
+
             _txtCorreo.Location = new Point(30, 150); _txtCorreo.Width = 340; EstilizarTextBox(_txtCorreo);
+            _txtCorreo.TextChanged += (s, e) => MarcarValidez(_txtCorreo, EsCorreoValido(_txtCorreo.Text.Trim()));
+
             _txtPassword.Location = new Point(30, 210); _txtPassword.Width = 340; _txtPassword.UseSystemPasswordChar = true; EstilizarTextBox(_txtPassword);
+            _txtPassword.TextChanged += (s, e) => MarcarValidez(_txtPassword, ContraseniaValida(_txtPassword.Text));
+
             _txtPassword2.Location = new Point(30, 270); _txtPassword2.Width = 340; _txtPassword2.UseSystemPasswordChar = true; EstilizarTextBox(_txtPassword2);
+            _txtPassword2.TextChanged += (s, e) => MarcarValidez(_txtPassword2, _txtPassword2.Text.Length > 0 && _txtPassword2.Text == _txtPassword.Text);
 
             _lblMensaje.Location = new Point(30, 310);
             _lblMensaje.AutoSize = true;
@@ -58,6 +71,11 @@ namespace SteamCloneApp.Views
 
         private void BtnRegistrar_Click(object? sender, EventArgs e)
         {
+            MarcarValidez(_txtUsuario, EsNombreUsuarioValido(_txtUsuario.Text));
+            MarcarValidez(_txtCorreo, EsCorreoValido(_txtCorreo.Text.Trim()));
+            MarcarValidez(_txtPassword, ContraseniaValida(_txtPassword.Text));
+            MarcarValidez(_txtPassword2, _txtPassword2.Text.Length > 0 && _txtPassword2.Text == _txtPassword.Text);
+
             if (_txtPassword.Text != _txtPassword2.Text)
             {
                 MostrarMensaje("Las contraseñas no coinciden.", UiTheme.AccentRed);
@@ -73,6 +91,44 @@ namespace SteamCloneApp.Views
                 timer.Tick += (s, e2) => { timer.Stop(); _mainForm.MostrarLogin(); };
                 timer.Start();
             }
+        }
+
+        private void TxtUsuario_KeyPress(object? sender, KeyPressEventArgs e)
+        {
+            if (char.IsControl(e.KeyChar)) return;
+            if (!(char.IsLetterOrDigit(e.KeyChar) || e.KeyChar == '_'))
+                e.Handled = true;
+        }
+
+        private void SanearUsuario()
+        {
+            var s = new string(_txtUsuario.Text.Where(c => char.IsLetterOrDigit(c) || c == '_').ToArray());
+            if (s != _txtUsuario.Text)
+            {
+                int pos = _txtUsuario.SelectionStart;
+                _txtUsuario.Text = s;
+                _txtUsuario.SelectionStart = Math.Min(pos, s.Length);
+            }
+            MarcarValidez(_txtUsuario, EsNombreUsuarioValido(s));
+        }
+
+        private static bool EsNombreUsuarioValido(string nombre)
+        {
+            nombre = nombre.Trim();
+            return nombre.Length >= 3
+                && nombre.Length <= 20
+                && nombre.All(c => char.IsLetterOrDigit(c) || c == '_');
+        }
+
+        private static bool EsCorreoValido(string correo) => RegexCorreo.IsMatch(correo);
+
+        private static bool ContraseniaValida(string password) =>
+            password.Any(char.IsLetter) && password.Any(char.IsDigit);
+
+        private static void MarcarValidez(TextBox txt, bool valido)
+        {
+            if (txt.Text.Length == 0) { txt.BackColor = UiTheme.PanelMid; return; }
+            txt.BackColor = valido ? UiTheme.PanelMid : ColorInvalid;
         }
 
         private void MostrarMensaje(string texto, Color color)
