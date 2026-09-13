@@ -1,0 +1,16 @@
+# Visual Studio
+.vs/
+*.user
+*.suo
+*.userprefs
+
+# Build output
+bin/
+obj/
+
+# Test artifacts
+TestResults/
+
+# System / temp
+Thumbs.db
+.DS_Store
