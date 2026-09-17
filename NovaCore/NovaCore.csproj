@@ -1,0 +1,27 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <OutputType>WinExe</OutputType>
+    <TargetFramework>net8.0-windows</TargetFramework>
+    <Nullable>disable</Nullable>
+    <UseWindowsForms>true</UseWindowsForms>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <RootNamespace>NovaCore</RootNamespace>
+    <AssemblyName>NovaCore</AssemblyName>
+  </PropertyGroup>
+
+  <!--
+    OPCIONAL: si quieres persistencia real en vez de listas en memoria,
+    descomenta esta línea e instala el paquete:
+    dotnet add package Microsoft.Data.Sqlite
+  -->
+  <!-- <ItemGroup>
+    <PackageReference Include="Microsoft.Data.Sqlite" Version="8.0.8" />
+  </ItemGroup> -->
+
+  <!-- Copia los recursos gráficos (logo, iconos) junto al ejecutable. -->
+  <ItemGroup>
+    <None Include="Assets\**\*" CopyToOutputDirectory="PreserveNewest" />
+  </ItemGroup>
+
+</Project>
