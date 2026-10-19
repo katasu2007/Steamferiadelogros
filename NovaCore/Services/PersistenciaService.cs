@@ -37,6 +37,10 @@ namespace NovaCore.Services
 
         private static string ArchivoTransacciones => Path.Combine(CarpetaDatos, "transacciones.json");
 
+        private static string ArchivoJuegos => Path.Combine(CarpetaDatos, "juegos.json");
+
+        private static string ArchivoCatalogoVersion => Path.Combine(CarpetaDatos, "catalogo.version");
+
         private static readonly JsonSerializerOptions Opciones = new()
         {
             WriteIndented = true
@@ -151,6 +155,45 @@ namespace NovaCore.Services
         }
 
         public static List<Transaccion> CargarTransacciones() => Cargar<Transaccion>(ArchivoTransacciones);
+
+        /// <summary>Guarda el catálogo de juegos (altas, ediciones y bajas del administrador).</summary>
+        public static void GuardarJuegos(IEnumerable<Juego> juegos)
+        {
+            Guardar(ArchivoJuegos, new List<Juego>(juegos));
+        }
+
+        public static List<Juego> CargarJuegos() => Cargar<Juego>(ArchivoJuegos);
+
+        /// <summary>
+        /// Lee la versión de catálogo que se sembró en la última ejecución.
+        /// Devuelve 0 si nunca se ha escrito (instalación nueva o datos antiguos).
+        /// </summary>
+        public static int CargarVersionCatalogo()
+        {
+            try
+            {
+                if (!File.Exists(ArchivoCatalogoVersion)) return 0;
+                return int.TryParse(File.ReadAllText(ArchivoCatalogoVersion).Trim(), out int v) ? v : 0;
+            }
+            catch
+            {
+                return 0;
+            }
+        }
+
+        /// <summary>Marca la versión del catálogo sembrado para detectar migraciones futuras.</summary>
+        public static void GuardarVersionCatalogo(int version)
+        {
+            try
+            {
+                Directory.CreateDirectory(CarpetaDatos);
+                File.WriteAllText(ArchivoCatalogoVersion, version.ToString());
+            }
+            catch
+            {
+                // Si no se puede escribir, la app sigue funcionando en memoria.
+            }
+        }
 
         private static void Guardar<T>(string archivo, List<T> datos)
         {

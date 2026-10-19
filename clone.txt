@@ -1,4 +1,5 @@
 Usuarios:
 admin	admin123
 rokoko	12345
-sushi	spiderman123
+sushi	xd123
+Kat	ola123

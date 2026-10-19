@@ -25,8 +25,10 @@ namespace NovaCore.Services
             {
                 TransaccionId = _db.SiguienteTransaccionId(),
                 UsuarioId = usuario.UsuarioId,
+                Tipo = TipoTransaccion.Compra,
                 JuegoId = juego.JuegoId,
                 JuegoTitulo = juego.Titulo,
+                MetodoPago = "Saldo de billetera",
                 Monto = juego.Precio,
                 Fecha = DateTime.Now,
                 Estado = EstadoTransaccion.Completada
@@ -47,15 +49,65 @@ namespace NovaCore.Services
 
         public List<Transaccion> ObtenerTodas() => _db.Transacciones.OrderByDescending(t => t.Fecha).ToList();
 
+        /// <summary>
+        /// Registra una recarga de billetera como transacción (una vez aplicado el
+        /// saldo) y genera la notificación del sistema que confirma el depósito.
+        /// Se usa tanto para pagos con tarjeta/PayPal como para el canje de gift
+        /// cards. El monto ya lo suma <see cref="UsuarioService.RecargarSaldo"/>.
+        /// </summary>
+        public Transaccion RegistrarRecarga(Usuario usuario, decimal monto, string metodoPago)
+        {
+            var transaccion = new Transaccion
+            {
+                TransaccionId = _db.SiguienteTransaccionId(),
+                UsuarioId = usuario.UsuarioId,
+                Tipo = TipoTransaccion.Recarga,
+                JuegoId = 0,
+                JuegoTitulo = "Recarga de Billetera",
+                MetodoPago = metodoPago,
+                Monto = monto,
+                Fecha = DateTime.Now,
+                Estado = EstadoTransaccion.Completada
+            };
+            _db.Transacciones.Add(transaccion);
+            PersistenciaService.GuardarTransacciones(_db.Transacciones);
+
+            new NotificacionService().Crear(
+                usuario.UsuarioId,
+                TipoNotificacion.Sistema,
+                "Recarga exitosa",
+                $"Se han añadido {monto:C} USD a tu billetera exitosamente ({metodoPago}).");
+
+            return transaccion;
+        }
+
+        /// <summary>Solo las recargas de billetera de un usuario, más recientes primero.</summary>
+        public List<Transaccion> ObtenerRecargasUsuario(int usuarioId) =>
+            _db.Transacciones
+               .Where(t => t.UsuarioId == usuarioId
+                           && t.Tipo == TipoTransaccion.Recarga
+                           && t.Estado == EstadoTransaccion.Completada)
+               .OrderByDescending(t => t.Fecha)
+               .ToList();
+
+        /// <summary>Movimientos de billetera de un usuario (recargas y compras), más recientes primero.</summary>
+        public List<Transaccion> ObtenerMovimientosUsuario(int usuarioId) =>
+            _db.Transacciones
+               .Where(t => t.UsuarioId == usuarioId && t.Estado == EstadoTransaccion.Completada)
+               .OrderByDescending(t => t.Fecha)
+               .ToList();
+
         public decimal ObtenerIngresosTotales() =>
-            _db.Transacciones.Where(t => t.Estado == EstadoTransaccion.Completada).Sum(t => t.Monto);
+            _db.Transacciones
+               .Where(t => t.Tipo == TipoTransaccion.Compra && t.Estado == EstadoTransaccion.Completada)
+               .Sum(t => t.Monto);
 
         public int ContarVentas() =>
-            _db.Transacciones.Count(t => t.Estado == EstadoTransaccion.Completada);
+            _db.Transacciones.Count(t => t.Tipo == TipoTransaccion.Compra && t.Estado == EstadoTransaccion.Completada);
 
         public List<(string Titulo, int Ventas, decimal Ingresos)> ObtenerRankingJuegos() =>
             _db.Transacciones
-               .Where(t => t.Estado == EstadoTransaccion.Completada)
+               .Where(t => t.Tipo == TipoTransaccion.Compra && t.Estado == EstadoTransaccion.Completada)
                .GroupBy(t => t.JuegoTitulo)
                .Select(g => (Titulo: g.Key, Ventas: g.Count(), Ingresos: g.Sum(x => x.Monto)))
                .OrderByDescending(x => x.Ingresos)

@@ -36,6 +36,7 @@ namespace NovaCore.Services
             juego.Activo = true;
             juego.ImagenPortada = PrepararImagenPortada(juego.ImagenPortada);
             _db.Juegos.Add(juego);
+            PersistenciaService.GuardarJuegos(_db.Juegos);
             return juego;
         }
 
@@ -43,6 +44,8 @@ namespace NovaCore.Services
         {
             var existente = _db.Juegos.FirstOrDefault(j => j.JuegoId == juegoActualizado.JuegoId);
             if (existente == null) return false;
+
+            var portadaAnterior = existente.ImagenPortada;
 
             existente.Titulo = juegoActualizado.Titulo;
             existente.Descripcion = juegoActualizado.Descripcion;
@@ -60,6 +63,9 @@ namespace NovaCore.Services
             existente.TieneContenidoMaduro = juegoActualizado.TieneContenidoMaduro;
             existente.DescripcionContenidoMaduro = juegoActualizado.DescripcionContenidoMaduro;
             existente.ImagenPortada = PrepararImagenPortada(juegoActualizado.ImagenPortada);
+
+            EliminarPortadaHuerfana(portadaAnterior, existente.ImagenPortada);
+            PersistenciaService.GuardarJuegos(_db.Juegos);
             return true;
         }
 
@@ -98,12 +104,39 @@ namespace NovaCore.Services
             }
         }
 
+        /// <summary>
+        /// Borra del disco la portada anterior cuando el administrador elige una
+        /// nueva imagen al editar el juego. Solo elimina archivos que viven dentro
+        /// de la carpeta de portadas de la app; nunca toca la imagen original del
+        /// usuario. Si la portada no cambió, no hace nada.
+        /// </summary>
+        private static void EliminarPortadaHuerfana(string? anterior, string? nueva)
+        {
+            if (string.IsNullOrWhiteSpace(anterior)) return;
+            if (string.Equals(anterior, nueva, StringComparison.OrdinalIgnoreCase)) return;
+
+            try
+            {
+                var carpeta = Path.GetFullPath(PersistenciaService.CarpetaPortadas);
+                var anteriorCompleta = Path.GetFullPath(anterior);
+                if (Path.GetDirectoryName(anteriorCompleta)?.Equals(carpeta, StringComparison.OrdinalIgnoreCase) != true)
+                    return;
+
+                if (File.Exists(anteriorCompleta)) File.Delete(anteriorCompleta);
+            }
+            catch
+            {
+                // Si no se puede borrar, se deja el archivo (no es crítico).
+            }
+        }
+
         /// <summary>Eliminado lógico: se marca como inactivo en lugar de borrarse físicamente.</summary>
         public bool Eliminar(int juegoId)
         {
             var existente = _db.Juegos.FirstOrDefault(j => j.JuegoId == juegoId);
             if (existente == null) return false;
             existente.Activo = false;
+            PersistenciaService.GuardarJuegos(_db.Juegos);
             return true;
         }
     }

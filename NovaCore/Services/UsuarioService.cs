@@ -15,10 +15,21 @@ namespace NovaCore.Services
         public Usuario? Login(string nombreUsuario, string password)
         {
             var usuario = _db.Usuarios.FirstOrDefault(u =>
-                u.NombreUsuario.Equals(nombreUsuario, StringComparison.OrdinalIgnoreCase) &&
-                u.PasswordHash == password);
+                u.NombreUsuario.Equals(nombreUsuario, StringComparison.OrdinalIgnoreCase));
 
             if (usuario == null) return null;
+
+            if (!PasswordHasher.Verificar(password, usuario.PasswordHash))
+                return null;
+
+            // Migración de cuentas antiguas: si la contraseña coincidió en texto
+            // plano, se re-guarda hasheada para que quede protegida a partir de ahora.
+            if (!PasswordHasher.EsHash(usuario.PasswordHash))
+            {
+                usuario.PasswordHash = PasswordHasher.Hash(password);
+                PersistenciaService.GuardarUsuarios(_db.Usuarios);
+            }
+
             if (!usuario.Activo) throw new InvalidOperationException("Esta cuenta ha sido desactivada por un administrador.");
 
             return usuario;
@@ -61,7 +72,7 @@ namespace NovaCore.Services
                 UsuarioId = _db.SiguienteUsuarioId(),
                 NombreUsuario = nombreUsuario,
                 Correo = correo,
-                PasswordHash = password, // NOTA: en producción usar hashing (BCrypt/PBKDF2)
+                PasswordHash = PasswordHasher.Hash(password), // nunca se guarda la contraseña en texto plano
                 Rol = RolUsuario.Usuario,
                 Saldo = 50m, // saldo de bienvenida simulado
                 Activo = true
@@ -103,14 +114,30 @@ namespace NovaCore.Services
             }
         }
 
-        public void RecargarSaldo(int usuarioId, decimal monto)
+        /// <summary>Monto mínimo aceptado en una recarga de billetera.</summary>
+        public const decimal MontoMinimoRecarga = 5m;
+
+        /// <summary>Monto máximo aceptado en una recarga de billetera.</summary>
+        public const decimal MontoMaximoRecarga = 500m;
+
+        /// <summary>
+        /// Suma saldo a la billetera del usuario, lo persiste en usuarios.json y
+        /// registra el movimiento (con su notificación) en el historial de
+        /// transacciones. Devuelve false si el usuario no existe o el monto queda
+        /// fuera del rango permitido ([<see cref="MontoMinimoRecarga"/>,
+        /// <see cref="MontoMaximoRecarga"/>]), sin modificar nada.
+        /// </summary>
+        public bool RecargarSaldo(int usuarioId, decimal monto, string metodoPago = "Recarga")
         {
+            if (monto < MontoMinimoRecarga || monto > MontoMaximoRecarga) return false;
+
             var u = _db.Usuarios.FirstOrDefault(x => x.UsuarioId == usuarioId);
-            if (u != null)
-            {
-                u.Saldo += monto;
-                PersistenciaService.GuardarUsuarios(_db.Usuarios);
-            }
+            if (u == null) return false;
+
+            u.Saldo += monto;
+            PersistenciaService.GuardarUsuarios(_db.Usuarios);
+            new TransaccionService().RegistrarRecarga(u, monto, metodoPago);
+            return true;
         }
 
         /// <summary>

@@ -1,3 +1,5 @@
+using System.Text.Json.Serialization;
+
 namespace NovaCore.Models
 {
     /// <summary>
@@ -19,6 +21,9 @@ namespace NovaCore.Models
 
         /// <summary>Etiquetas separadas por coma, ej: "Early Access, FPS, Action, Military".</summary>
         public string Tags { get; set; } = string.Empty;
+
+        /// <summary>Vista derivada de <see cref="Tags"/>, no se persiste.</summary>
+        [JsonIgnore]
         public List<string> TagsLista => Tags.Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries).ToList();
 
         // --- Reviews (simuladas, no hay usuarios reales calificando) ---

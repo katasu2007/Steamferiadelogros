@@ -71,20 +71,55 @@ namespace NovaCore.Views
 
         private void BtnRegistrar_Click(object? sender, EventArgs e)
         {
-            MarcarValidez(_txtUsuario, EsNombreUsuarioValido(_txtUsuario.Text));
-            MarcarValidez(_txtCorreo, EsCorreoValido(_txtCorreo.Text.Trim()));
-            MarcarValidez(_txtPassword, ContraseniaValida(_txtPassword.Text));
-            MarcarValidez(_txtPassword2, _txtPassword2.Text.Length > 0 && _txtPassword2.Text == _txtPassword.Text);
+            // 1) Validación en la vista: campos obligatorios no vacíos.
+            string usuario = _txtUsuario.Text.Trim();
+            string correo = _txtCorreo.Text.Trim();
+            string password = _txtPassword.Text;
+            string password2 = _txtPassword2.Text;
 
-            if (_txtPassword.Text != _txtPassword2.Text)
+            MarcarValidez(_txtUsuario, EsNombreUsuarioValido(usuario));
+            MarcarValidez(_txtCorreo, EsCorreoValido(correo));
+            MarcarValidez(_txtPassword, ContraseniaValida(password));
+            MarcarValidez(_txtPassword2, password2.Length > 0 && password2 == password);
+
+            if (string.IsNullOrWhiteSpace(usuario) || string.IsNullOrWhiteSpace(correo)
+                || string.IsNullOrWhiteSpace(password) || string.IsNullOrWhiteSpace(password2))
+            {
+                MostrarMensaje("Todos los campos son obligatorios.", UiTheme.AccentRed);
+                return;
+            }
+
+            if (!EsNombreUsuarioValido(usuario))
+            {
+                MostrarMensaje("El usuario debe tener entre 3 y 20 caracteres (letras, números o guion bajo).", UiTheme.AccentRed);
+                return;
+            }
+
+            // 2) El correo debe tener un formato válido.
+            if (!EsCorreoValido(correo))
+            {
+                MostrarMensaje("Ingresa un correo electrónico válido (ej. nombre@dominio.com).", UiTheme.AccentRed);
+                return;
+            }
+
+            if (!ContraseniaValida(password))
+            {
+                MostrarMensaje("La contraseña debe combinar letras y números (mínimo 4 caracteres).", UiTheme.AccentRed);
+                return;
+            }
+
+            // 3) La contraseña y su confirmación deben coincidir exactamente.
+            if (password != password2)
             {
                 MostrarMensaje("Las contraseñas no coinciden.", UiTheme.AccentRed);
                 return;
             }
 
-            var (exito, mensaje) = _usuarioService.Registrar(_txtUsuario.Text, _txtCorreo.Text, _txtPassword.Text);
+            // 4) Registro en el backend (el servicio valida duplicados y hashea la contraseña).
+            var (exito, mensaje) = _usuarioService.Registrar(usuario, correo, password);
             MostrarMensaje(mensaje, exito ? UiTheme.AccentGreen : UiTheme.AccentRed);
 
+            // 5) Tras registrarse con éxito, se redirige automáticamente al Login.
             if (exito)
             {
                 var timer = new System.Windows.Forms.Timer { Interval = 1200 };
